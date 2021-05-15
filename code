@@ -1,0 +1,135 @@
+# Packages
+
+library(dplyr)
+library(Amelia)
+library(magick)
+library(ggplot2)
+library(tidyverse)
+library(gganimate)
+library(directlabels)
+library(png)
+library(transformr)
+library(grid)
+
+
+# dataset location
+# https://www.kaggle.com/stefanoleone992/imdb-extensive-dataset?select=IMDb+ratings.csv
+
+# import data
+movie <- read.csv("IMDb movies.csv")
+rating <- read.csv("IMDb ratings.csv")
+
+# join two databases
+dat <- merge(movie, rating, by = "imdb_title_id")
+
+#view of data
+head(dat)
+str(dat)
+
+# clean the data
+
+# subset variables for visual
+df <- dat %>% select(year, total_votes, avg_vote, duration)
+
+# view df and check for missing values
+missmap(df) # looks good, except chr type for year
+
+# we find an observation called "TV movie 2019" in last row, need to remove
+df1 <- df[df$year != "TV Movie 2019", ]
+v1 <- aggregate(df1$total_votes, by = list(Category=df1$year), FUN = sum)
+v2 <- aggregate(df1$avg_vote, by = list(Category=df1$year), FUN = mean)
+v3 <- aggregate(df1$avg_vote, by = list(Category=df1$year), FUN = length)
+v4 <- aggregate(df1$duration, by = list(Category=df1$year), FUN = mean)
+
+# verify as rating averages seem low
+mean(df$avg_vote) # looks to be in the ballpark
+
+# clean v1
+v1$year = as.integer(v1$Category)
+v1$total_votes = v1$x
+v1 <- v1 %>% select(year, total_votes)
+
+# clean v2
+v2$year = as.integer(v2$Category)
+v2$avg_vote = v2$x
+v2 <- v2 %>% select(year, avg_vote)
+
+# clean v3
+v3$year = as.integer(v3$Category)
+v3$num_movies = v3$x
+v3 <- v3 %>% select(year, num_movies)
+
+# clean v4
+v4$year = as.integer(v4$Category)
+v4$duration = v4$x
+v4 <- v4 %>% select(year, duration)
+
+# visuals
+
+# visual 1
+
+options(scipen = 999)
+
+gif1 <- ggplot(v1, aes(year, total_votes)) +
+  geom_line(color = "lawngreen") +
+  theme_dark() +
+  transition_reveal(year) +
+  labs(title = 'Total Votes by Year: {frame_along}', x = "Year", y = "Number of Votes")
+
+gif1 <- animate(gif1, width = 240, height = 240, renderer = magick_renderer())
+
+
+# visual 2
+
+options(scipen = 999)
+
+gif2 <- ggplot(v2, aes(year, avg_vote)) +
+  geom_line(color = "cyan") +
+  transition_reveal(year) +
+  theme_dark() +
+  labs(title = 'Average Rating By Year: {frame_along}', x = "Year", y = "Average Rating")
+
+gif2 <- animate(gif2, width = 240, height = 240, renderer = magick_renderer())
+
+
+# visual 3
+
+options(scipen = 999)
+
+gif3 <- ggplot(v3, aes(year, num_movies)) +
+  geom_line(color = "orchid1") +
+  transition_reveal(year) +
+  theme_dark() +
+  labs(title = 'Amount of Movies By Year: {frame_along}', x = "Year", y = "Number of Movies")
+
+gif3 <- animate(gif3, width = 240, height = 240, renderer = magick_renderer())
+
+
+# visual 4
+
+options(scipen = 999)
+
+gif4 <- ggplot(v4, aes(year, duration)) +
+  geom_line(color = "yellow") +
+  transition_reveal(year) +
+  theme_dark() +
+  labs(title = 'Average Duration by Year: {frame_along}', x = "Year", y = "Duration (Minutes)")
+
+gif4 <- animate(gif4, width = 240, height = 240, renderer = magick_renderer())
+
+
+# Combine the gifs
+
+i=1
+combined <- image_append(c(gif1[i], gif4[i]))
+new_gif <- image_append(c(image_flatten(combined),
+                          gif2[i], gif3[i]), stack=FALSE)
+
+for(i in 2:100){
+  combined <- image_append(c(gif1[i], gif4[i]))
+  fullcombined <- image_append(c(image_flatten(combined), 
+                                 gif2[i], gif3[i]), stack=FALSE)
+  new_gif <- c(new_gif, fullcombined)
+}
+
+image_write(new_gif, format="gif", path="animation.3.gif")
